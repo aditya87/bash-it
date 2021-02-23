@@ -27,6 +27,11 @@ SCM_THEME_CHAR_SUFFIX=''
 
 THEME_BATTERY_PERCENTAGE_CHECK=${THEME_BATTERY_PERCENTAGE_CHECK:=true}
 
+# Custom SCM options
+SCM_GIT_SHOW_DETACHMENT_PREFIX=${SCM_GIT_SHOW_DETACHMENT_PREFIX:=true}
+SCM_GIT_CHECK_STATUS=${SCM_GIT_CHECK_STATUS:=true}
+SCM_GIT_SHOW_CURRENT_STATE=${SCM_GIT_SHOW_CURRENT_STATE:=true}
+
 SCM_GIT_SHOW_DETAILS=${SCM_GIT_SHOW_DETAILS:=true}
 SCM_GIT_SHOW_REMOTE_INFO=${SCM_GIT_SHOW_REMOTE_INFO:=auto}
 SCM_GIT_IGNORE_UNTRACKED=${SCM_GIT_IGNORE_UNTRACKED:=false}
@@ -215,34 +220,38 @@ function git_prompt_vars {
 		SCM_GIT_GITSTATUS_RAN=false
 	fi
 
-	if _git-branch &> /dev/null; then
-		SCM_GIT_DETACHED="false"
-		SCM_BRANCH="${SCM_THEME_BRANCH_PREFIX}\$(_git-friendly-ref)$(_git-remote-info)"
-	else
-		SCM_GIT_DETACHED="true"
-
-		local detached_prefix
-		if _git-tag &> /dev/null; then
-			detached_prefix=${SCM_THEME_TAG_PREFIX}
+	if [[ "${SCM_GIT_SHOW_DETACHMENT_PREFIX}" == "true" ]]; then
+		if _git-branch &> /dev/null; then
+			SCM_GIT_DETACHED="false"
+			SCM_BRANCH="${SCM_THEME_BRANCH_PREFIX}\$(_git-friendly-ref)$(_git-remote-info)"
 		else
-			detached_prefix=${SCM_THEME_DETACHED_PREFIX}
+			SCM_GIT_DETACHED="true"
+
+			local detached_prefix
+			if _git-tag &> /dev/null; then
+				detached_prefix=${SCM_THEME_TAG_PREFIX}
+			else
+				detached_prefix=${SCM_THEME_DETACHED_PREFIX}
+			fi
+			SCM_BRANCH="${detached_prefix}\$(_git-friendly-ref)"
 		fi
-		SCM_BRANCH="${detached_prefix}\$(_git-friendly-ref)"
 	fi
 
-	if [[ "${SCM_GIT_GITSTATUS_RAN}" == "true" ]]; then
-		commits_behind=${VCS_STATUS_COMMITS_BEHIND}
-		commits_ahead=${VCS_STATUS_COMMITS_AHEAD}
-	else
-		IFS=$'\t' read -r commits_behind commits_ahead <<< "$(_git-upstream-behind-ahead)"
-	fi
-	if [[ "${commits_ahead}" -gt 0 ]]; then
-		SCM_BRANCH+="${SCM_GIT_AHEAD_BEHIND_PREFIX_CHAR}${SCM_GIT_AHEAD_CHAR}"
-		[[ "${SCM_GIT_SHOW_COMMIT_COUNT}" = "true" ]] && SCM_BRANCH+="${commits_ahead}"
-	fi
-	if [[ "${commits_behind}" -gt 0 ]]; then
-		SCM_BRANCH+="${SCM_GIT_AHEAD_BEHIND_PREFIX_CHAR}${SCM_GIT_BEHIND_CHAR}"
-		[[ "${SCM_GIT_SHOW_COMMIT_COUNT}" = "true" ]] && SCM_BRANCH+="${commits_behind}"
+	if [[ "${SCM_GIT_CHECK_STATUS}" == true ]]; then
+		if [[ "${SCM_GIT_GITSTATUS_RAN}" == "true" ]]; then
+			commits_behind=${VCS_STATUS_COMMITS_BEHIND}
+			commits_ahead=${VCS_STATUS_COMMITS_AHEAD}
+		else
+			IFS=$'\t' read -r commits_behind commits_ahead <<< "$(_git-upstream-behind-ahead)"
+		fi
+		if [[ "${commits_ahead}" -gt 0 ]]; then
+			SCM_BRANCH+="${SCM_GIT_AHEAD_BEHIND_PREFIX_CHAR}${SCM_GIT_AHEAD_CHAR}"
+			[[ "${SCM_GIT_SHOW_COMMIT_COUNT}" = "true" ]] && SCM_BRANCH+="${commits_ahead}"
+		fi
+		if [[ "${commits_behind}" -gt 0 ]]; then
+			SCM_BRANCH+="${SCM_GIT_AHEAD_BEHIND_PREFIX_CHAR}${SCM_GIT_BEHIND_CHAR}"
+			[[ "${SCM_GIT_SHOW_COMMIT_COUNT}" = "true" ]] && SCM_BRANCH+="${commits_behind}"
+		fi
 	fi
 
 	if [[ "${SCM_GIT_SHOW_STASH_INFO}" = "true" ]]; then
@@ -255,23 +264,25 @@ function git_prompt_vars {
 		[[ "${stash_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_STASH_CHAR_PREFIX}${stash_count}${SCM_GIT_STASH_CHAR_SUFFIX}"
 	fi
 
-	SCM_STATE=${GIT_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
-	if ! _git-hide-status; then
-		if [[ "${SCM_GIT_GITSTATUS_RAN}" == "true" ]]; then
-			untracked_count=${VCS_STATUS_NUM_UNTRACKED}
-			unstaged_count=${VCS_STATUS_NUM_UNSTAGED}
-			staged_count=${VCS_STATUS_NUM_STAGED}
-		else
-			IFS=$'\t' read -r untracked_count unstaged_count staged_count <<< "$(_git-status-counts)"
-		fi
-		if [[ "${untracked_count}" -gt 0 || "${unstaged_count}" -gt 0 || "${staged_count}" -gt 0 ]]; then
-			SCM_DIRTY=1
-			if [[ "${SCM_GIT_SHOW_DETAILS}" = "true" ]]; then
-				[[ "${staged_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_STAGED_CHAR}${staged_count}" && SCM_DIRTY=3
-				[[ "${unstaged_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_UNSTAGED_CHAR}${unstaged_count}" && SCM_DIRTY=2
-				[[ "${untracked_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_UNTRACKED_CHAR}${untracked_count}" && SCM_DIRTY=1
+	if [[ "${SCM_GIT_SHOW_CURRENT_STATE}" = "true" ]]; then
+		SCM_STATE=${GIT_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
+		if ! _git-hide-status; then
+			if [[ "${SCM_GIT_GITSTATUS_RAN}" == "true" ]]; then
+				untracked_count=${VCS_STATUS_NUM_UNTRACKED}
+				unstaged_count=${VCS_STATUS_NUM_UNSTAGED}
+				staged_count=${VCS_STATUS_NUM_STAGED}
+			else
+				IFS=$'\t' read -r untracked_count unstaged_count staged_count <<< "$(_git-status-counts)"
 			fi
-			SCM_STATE=${GIT_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
+			if [[ "${untracked_count}" -gt 0 || "${unstaged_count}" -gt 0 || "${staged_count}" -gt 0 ]]; then
+				SCM_DIRTY=1
+				if [[ "${SCM_GIT_SHOW_DETAILS}" = "true" ]]; then
+					[[ "${staged_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_STAGED_CHAR}${staged_count}" && SCM_DIRTY=3
+					[[ "${unstaged_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_UNSTAGED_CHAR}${unstaged_count}" && SCM_DIRTY=2
+					[[ "${untracked_count}" -gt 0 ]] && SCM_BRANCH+=" ${SCM_GIT_UNTRACKED_CHAR}${untracked_count}" && SCM_DIRTY=1
+				fi
+				SCM_STATE=${GIT_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
+			fi
 		fi
 	fi
 
@@ -282,6 +293,10 @@ function git_prompt_vars {
 	SCM_SUFFIX=${GIT_THEME_PROMPT_SUFFIX:-$SCM_THEME_PROMPT_SUFFIX}
 
 	SCM_CHANGE=$(_git-short-sha 2> /dev/null || echo "")
+}
+
+log() {
+	echo "Log message: $1" >&2
 }
 
 function p4_prompt_vars {
